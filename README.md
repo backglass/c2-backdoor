@@ -1,4 +1,3 @@
-
 # Command and Control (C2) with Backdoor
 
 ## Descripción
@@ -44,6 +43,15 @@ Funciones principales:
 - `run_command(command)`: Ejecuta un comando a nivel de shell y devuelve la salida.
 - `get_firefox_profiles(username)`: Obtiene el perfil de Firefox del usuario.
 - `get_firefox_passwords(username, profile)`: Obtiene las contraseñas de Firefox usando `firefox_decrypt.py`.
+
+## Herramientas de terceros
+
+Este repositorio hace uso de las siguientes herramientas de terceros:
+
+- [LaZagne](https://github.com/AlessandroZ/LaZagne): Utilizado para obtener las contraseñas almacenadas en varios navegadores, incluyendo Chrome y Brave.
+- [firefox_decrypt](https://github.com/unode/firefox_decrypt): Utilizado para obtener las contraseñas almacenadas en Firefox.
+
+Agradecemos a los desarrolladores de estas herramientas por su excelente trabajo.
 
 ## Uso
 
